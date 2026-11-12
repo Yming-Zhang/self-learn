@@ -1,0 +1,110 @@
+Mac下载安装nvm
+腾讯云
+https://juejin.cn/post/7083026831263137800
+
+csdn----这篇文章更为清晰明了
+https://blog.csdn.net/ganyingxie123456/article/details/132188576
+
+解决 nvm list available 显示 N/A 的问题
+您遇到的问题 nvm list available 显示 N/A 是正常现象，但这与您之前的 nvm ls 输出完全无关。这是两个不同的命令，有不同的行为。以下是详细解释：
+✅ 根本原因
+1. nvm list available 已被弃用
+关键事实：在较新版本的 NVM 中，nvm list available 命令已被弃用
+官方文档明确说明：
+"The nvm list available command has been deprecated. Please use nvm ls-remote instead."
+2. 正确命令应该是 nvm ls-remote
+
+nvm list available → 已弃用（显示 N/A 是预期行为）
+nvm ls-remote → 当前推荐命令（显示可用版本列表）
+
+
+Mac前端环境工具推荐
+https://juejin.cn/post/7529538866181767214
+
+
+Mac 设置 npm 镜像源
+123
+
+一、国内npm镜像源
+1.	淘宝NPM镜像
+registry.npmmirror.com/
+2.	阿里云NPM镜像
+npm.aliyun.com/
+3.	腾讯云NPM镜像
+mirrors.cloud.tencent.com/npm/
+4.	华为云NPM镜像
+repo.huaweicloud.com/repository/… （需要自己开通）
+5.	网易NPM镜像
+mirrors.163.com/npm/
+6.	中国科学技术大学开源NPM镜像
+mirrors.ustc.edu.cn/npm/
+7.	清华大学开源NPM镜像
+mirrors.tuna.tsinghua.edu.cn/npm/ （需要镜像申请）
+8.	CNPM镜像
+r.cnpmjs.org/
+
+作者：左江涛
+链接：https://juejin.cn/post/7459561147580465171
+来源：稀土掘金
+在国内使用 npm 时，由于网络限制，可能会遇到下载速度慢的问题。通过设置国内的 npm 镜像源，可以显著提升下载速度。以下是具体方法：
+直接设置镜像源
+使用 npm config 命令直接配置镜像源。
+•	淘宝镜像源 淘宝提供了稳定且快速的 npm 镜像：
+npm config set registry https://registry.npmmirror.com
+ 
+•	阿里云镜像源 阿里云提供的镜像：
+npm config set registry https://npm.aliyun.com
+ 
+•	腾讯云镜像源 腾讯云的镜像：
+npm config set registry https://mirrors.cloud.tencent.com/npm/
+ 
+•	查看当前镜像源 验证当前使用的镜像源：
+npm config get registry
+ 
+•	恢复官方源 如果需要切换回官方源：
+npm config set registry https://registry.npmjs.org/
+ 
+14个VUE组件库
+https://www.cnblogs.com/testzcy/p/19118102
+Vue.js是一个广受欢迎的JavaScript框架，它以其轻量级和易于学习的特点在前端开发者中备受青睐。Vue的生态系统中包含了许多UI库，这些库提供了预先构建的组件和工具，帮助开发者快速高效地构建出既美观又响应迅速的用户界面。
+移动端常用组件库
+•	Vant UI：由有赞前端团队开发，支持Vue2/3，微信小程序和支付宝小程序。
+•	uView：uni-app生态中的UI框架，全面的组件和便捷的工具。
+•	Cube UI：滴滴出行移动端UI库，基于Vue.js开发。
+•	Mint UI：饿了么前端团队开发的移动组件库。
+PC端（Web端）常用组件库
+•	Element UI：饿了么前端团队开发的Vue2组件库。
+•	Ant Design Vue：基于Vue的Ant Design团队开发的UI组件库。
+•	iView：一套基于Vue.js的高质量UI组件库。
+数据可视化组件库
+•	ECharts：百度开源的数据可视化库，用于创建交互式图表和数据可视化界面。
+•	Highcharts：流行的JavaScript图表库，用于创建交互式和可定制化的图表和数据可视化。
+动画组件库
+•	Swiper：流行的移动端轮播图组件库，用于创建滑动轮播和触摸滑动效果的移动端应用程序。
+•	vue-seamless-scroll：基于Vue.js的插件，用于实现无缝滚动效果的组件。
+文本编辑器组件库
+•	TinyMCE：易用且功能强大的所见即所得的富文本编辑器。
+•	vue-quill-editor：基于Quill的富文本编辑器，适用于Vue.js项目。
+3D组件库
+•	ThreeJS：流行的开源JavaScript库，用于在Web浏览器中创建和展示3D图形场景。
+•	BabylonJs：强大的开源JavaScript框架，用于构建高性能的3D游戏、虚拟现实（VR）和增强现实（AR）应用程序。
+微前端组件库
+•	qiankun：流行的微前端解决方案，支持多种框架，包括Vue。
+其他组件库
+•	VueUse：基于Vue 3的组合式功能集合库，提供了一系列的组合式函数（Composition API）。
+这些组件库为Vue.js开发者提供了丰富的资源，无论是在构建移动应用、PC端应用还是数据可视化界面，都能找到合适的工具。随着Vue.js的不断发展，这些组件库也在不断更新和完善，以适应开发者的需求。
+
+Npm vue目录结构
+https://blog.csdn.net/A_bad_horse/article/details/123237127
+
+
+
+http://www.webgl3d.cn/Three.js/
+
+https://blog.csdn.net/qq_39669919/article/details/137512530
+Three.js 入门：如何使用并绘制基础 3D 图形canvas
+https://zhuanlan.zhihu.com/p/30447612
+
+https://www.w3ccoo.com/threejs/threejs_quick_guide.html
+
+https://threejs.org/

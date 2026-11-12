@@ -1,0 +1,148 @@
+1. 文件与目录
+pwd                         # 当前目录
+ls -lah                     # 文件详情，包含隐藏文件
+cd /var/log                 # 切换目录
+cd ..                       # 上一级目录
+mkdir -p /data/app/logs      # 创建多级目录
+cp app.yml app.yml.bak       # 复制、备份
+cp -r config config.bak      # 复制目录
+mv old.log new.log           # 移动或重命名
+rm file.log                 # 删除文件
+rm -r old-dir               # 递归删除目录
+rm -rf 没有回收站，执行前务必确认路径。
+
+2. 查看与搜索日志
+cat app.yml                          # 查看小文件
+less app.log                         # 分页查看，/搜索，q退出
+head -n 20 app.log                    # 前20行
+tail -n 100 app.log                   # 后100行
+tail -F app.log                       # 持续追踪，适合滚动日志
+tail -F app.log | grep --line-buffered 'ERROR'
+grep -n 'Exception' app.log           # 搜索并显示行号
+grep -A 20 -B 5 'Exception' app.log    # 显示匹配行前后内容
+grep -r -n 'server.port' config/      # 递归搜索目录内容
+find /data/app -type f -name '*.log'   # 按文件名查找
+cat 不支持用 -f 追踪日志；实时查看用 tail。
+
+3. 权限
+ls -l start.sh
+chmod u+x start.sh          # 只给所有者增加执行权限
+chmod 640 app.yml           # 所有者读写、组可读、其他人无权限
+chown app:app app.log       # 修改所有者和所属组，需要相应权限
+权限分三组：所有者、所属组、其他用户。
+r=4、w=2、x=1；755 是 rwxr-xr-x。
+文件的 x 表示可以执行。
+目录的 r 表示能列出文件名，x 表示能进入和查找条目。
+删除文件通常需要所在目录的 w+x，还受粘滞位等限制。
+4. 进程与 Java CPU 排障
+ps -ef | grep '[j]ava'      # 查看Java进程
+top                        # 实时资源使用，按大写P按CPU排序
+top -H -p 1234              # 查看该进程的线程CPU占用
+printf '%x\n' 1250          # 将高CPU线程ID转成十六进制
+jstack 1234 > /tmp/java-1234.stack
+grep -A 30 'nid=0x4e2 ' /tmp/java-1234.stack
+kill 1234                  # SIGTERM，请求退出
+kill -9 1234               # SIGKILL，最后才考虑强制终止
+核心链路：高 CPU 进程 → 高 CPU 线程 → 十六进制线程 ID → Java 堆栈。多次采样比单次堆栈可靠。
+
+5. 端口与网络
+ss -ltnp 'sport = :8080'                  # 查TCP监听端口及进程
+lsof -nP -iTCP:8080 -sTCP:LISTEN           # 查8080端口占用
+curl -i --max-time 5 http://localhost:8080/health
+curl -v --max-time 5 http://example.com    # 查看连接和HTTP交互
+ping example.com                         # 检查ICMP连通性
+ping 通不代表 HTTP 服务正常；不通也可能只是禁用了 ICMP。端口监听还要看绑定的是 127.0.0.1 还是对外地址。
+
+6. 磁盘与内存
+df -h /var/log             # 所在文件系统的空间使用率
+df -i /var/log             # inode使用率
+du -sh /var/log            # 目录总占用
+du -h --max-depth=1 /var/log | sort -h
+free -h                    # 内存情况，重点看available
+lsof +L1                   # 查找已删除但仍被进程打开的文件
+“磁盘满”可能是空间耗尽，也可能是 inode 耗尽；文件删除后若仍被进程打开，空间不一定立即释放。
+
+7.
+下面先给你一份 Java 开发最常用的 Linux 基础清单，以日常操作、部署和线上排障为主。
+
+1. 文件与目录
+pwd                         # 当前目录
+ls -lah                     # 文件详情，包含隐藏文件
+cd /var/log                 # 切换目录
+cd ..                       # 上一级目录
+mkdir -p /data/app/logs      # 创建多级目录
+cp app.yml app.yml.bak       # 复制、备份
+cp -r config config.bak      # 复制目录
+mv old.log new.log           # 移动或重命名
+rm file.log                 # 删除文件
+rm -r old-dir               # 递归删除目录
+rm -rf 没有回收站，执行前务必确认路径。
+
+2. 查看与搜索日志
+cat app.yml                          # 查看小文件
+less app.log                         # 分页查看，/搜索，q退出
+head -n 20 app.log                    # 前20行
+tail -n 100 app.log                   # 后100行
+tail -F app.log                       # 持续追踪，适合滚动日志
+tail -F app.log | grep --line-buffered 'ERROR'
+grep -n 'Exception' app.log           # 搜索并显示行号
+grep -A 20 -B 5 'Exception' app.log    # 显示匹配行前后内容
+grep -r -n 'server.port' config/      # 递归搜索目录内容
+find /data/app -type f -name '*.log'   # 按文件名查找
+cat 不支持用 -f 追踪日志；实时查看用 tail。
+
+3. 权限
+ls -l start.sh
+chmod u+x start.sh          # 只给所有者增加执行权限
+chmod 640 app.yml           # 所有者读写、组可读、其他人无权限
+chown app:app app.log       # 修改所有者和所属组，需要相应权限
+权限分三组：所有者、所属组、其他用户。
+r=4、w=2、x=1；755 是 rwxr-xr-x。
+文件的 x 表示可以执行。
+目录的 r 表示能列出文件名，x 表示能进入和查找条目。
+删除文件通常需要所在目录的 w+x，还受粘滞位等限制。
+4. 进程与 Java CPU 排障
+ps -ef | grep '[j]ava'      # 查看Java进程
+top                        # 实时资源使用，按大写P按CPU排序
+top -H -p 1234              # 查看该进程的线程CPU占用
+printf '%x\n' 1250          # 将高CPU线程ID转成十六进制
+jstack 1234 > /tmp/java-1234.stack
+grep -A 30 'nid=0x4e2 ' /tmp/java-1234.stack
+kill 1234                  # SIGTERM，请求退出
+kill -9 1234               # SIGKILL，最后才考虑强制终止
+核心链路：高 CPU 进程 → 高 CPU 线程 → 十六进制线程 ID → Java 堆栈。多次采样比单次堆栈可靠。
+
+5. 端口与网络
+ss -ltnp 'sport = :8080'                  # 查TCP监听端口及进程
+lsof -nP -iTCP:8080 -sTCP:LISTEN           # 查8080端口占用
+curl -i --max-time 5 http://localhost:8080/health
+curl -v --max-time 5 http://example.com    # 查看连接和HTTP交互
+ping example.com                         # 检查ICMP连通性
+ping 通不代表 HTTP 服务正常；不通也可能只是禁用了 ICMP。端口监听还要看绑定的是 127.0.0.1 还是对外地址。
+
+6. 磁盘与内存
+df -h /var/log             # 所在文件系统的空间使用率
+df -i /var/log             # inode使用率
+du -sh /var/log            # 目录总占用
+du -h --max-depth=1 /var/log | sort -h
+free -h                    # 内存情况，重点看available
+lsof +L1                   # 查找已删除但仍被进程打开的文件
+“磁盘满”可能是空间耗尽，也可能是 inode 耗尽；文件删除后若仍被进程打开，空间不一定立即释放。
+
+7. 管道、重定向与后台运行
+command > output.log       # 覆盖写入标准输出
+command >> output.log      # 追加标准输出
+command > output.log 2>&1   # 标准输出和错误写入同一文件
+command1 | command2        # 左侧标准输出交给右侧
+nohup java -jar app.jar > app.log 2>&1 &
+& 表示后台运行；nohup 用于避免挂断信号导致退出。正式服务优先交给 systemd 等管理，不只依赖 nohup。
+
+8. 服务、远程操作与压缩
+systemctl status myapp                 # 服务状态
+systemctl restart myapp                # 重启，需要相应权限
+journalctl -u myapp -n 100 -f           # 查看并追踪服务日志
+ssh app@server                        # 远程登录
+scp app.jar app@server:/data/app/      # 上传文件
+tar -czf logs.tar.gz logs/             # 压缩
+tar -xzf logs.tar.gz                   # 解压
+**优先掌握：日志过滤、权限、端口定位、进程终止、磁盘检查，以及 Java CPU 排障链路。**这几块是 Java 开发最容易实际用到的。

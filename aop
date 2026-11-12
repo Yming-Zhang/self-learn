@@ -1,0 +1,433 @@
+关于springAOP的知识有个点我 比较含糊，就是jdk和cglib两种代理的实际调用链我讲不清楚，自然这块的知识就没百分百的掌控感，比如我debug看调用，能知道外部bean调用带AOP的方法时，进入了代理对象的对应方法，里面是super.h.invoke,参数代理对象，代理方法，参数，这个h是构造函数赋值，spring给的invocationhandler也就是jdkdynamicaopproxy，也就是到了它的invoke方法里面，开始扫描advisor执行，然后执行代理方法，我也大概能理解这个过程，但为什么过几天就忘记了？还是因为这一串逻辑里有几个点我不理解是硬记的，所以才容易忘记，还是要深入理解透彻才行，，比如我知道spring生成了这个目标对象的代理对象，给引用这个bean的地方注入代理对象的地址，但我不理解是什么时候生成的代理对象，是怎么确定的这个类要生成代理对象？，还有就是这个jdk的invocatinghandler是什么时候从构造函数注入的，为什么能这么早，是springboot启动就决定了那些类最先实例化吗？分批次的？还有这个里面的inboke方法做了什么事情我也没看懂，到底是怎么把AOP切入的这写代码给扫描到的？怎么给执行的？你认为我是缺少了哪方面的知识才不懂的，你给我把这一串调用链路讲透彻，同时给我列出来你认为我缺少的相关背景知识
+
+
+我先看一下你项目里的 AOP 示例和 Spring 版本，再把“启动时如何创建代理”和“调用时如何执行通知”两条链路接起来，方便你对照源码下断点。
+
+你描述的 JDK 调用入口基本是对的，关键是把“Bean 创建时匹配切面”和“每次调用时执行拦截器链”分开。另外，当前测试配置选的是 CGLIB，断言却要求 JDK 代理；这会干扰调试判断，我先核对示例和本地源码，不修改代码。
+
+示例里真正的切入点是 ：Spring 会把这段 @Around 通知转换成拦截器，运行时由 推进调用链。我再核对三个关键位置：谁注册自动代理器、谁给 JDK 代理传入 handler，以及 CGLIB 最终调用的是代理还是独立的 target。
+
+你现在缺的主要不是某个 AOP 你现在缺的主要不是某个 AOP 类的细节，而是把“容器启动、代理构造、方法调用”三个阶段串成因果关系的背景知识。目前你记住的是调用栈上的名字，还不能解释“上一层为什么一定能准备好下一层”，所以过几天容易断片。 不需要记住整个 Spring 源码。目标是：忘了类名，也能根据对象关系推导出调用过程。
+
+1. 先认清对象 以你的 GreetingServiceImpl 和 LoggingAspect 为例，普通单例 AOP 场景至少涉及这些角色：
+
+target：真正的 实例，业务方法最终在它身上执行。
+proxy：调用方拿到的代理实例，和 target 是两个对象。
+Advisor：可以近似理解成“在哪里执行的规则 Pointcut + 执行什么的 Advice”。
+handler / callback：代理的统一入口，掌握 target 和 Advisors 等配置。
+MethodInvocation：一次方法调用的上下文，保存参数、target、拦截器链和当前执行位置。 最重要的对象关系是：调用方 → proxy → handler/callback → 拦截器链 → target。不是把日志代码直接塞进原来的 方法里。
+2. 启动时谁先准备好 你问“是不是分批次实例化”，答案是：容器确实有启动阶段，但不是先创建所有切面，再创建所有业务对象这么简单。 典型启动过程可以压缩成：注册 BeanDefinition → 执行容器级后处理 → 注册 BeanPostProcessor → 创建普通非懒加载单例。 BeanDefinition 是创建对象的描述，不是对象本身。因此 Spring 可以先知道“有一个 LoggingAspect 类、有哪些注解和方法”，而不必先把所有相关实例创建出来。 你的项目使用 Boot 3.5.7 和 AOP starter，满足自动配置条件时，AopAutoConfiguration 通过 @EnableAspectJAutoProxy 的导入机制注册 AnnotationAwareAspectJAutoProxyCreator。 这个很长的名字，本质上是一个 BeanPostProcessor：参与普通 Bean 的创建过程，必要时把返回结果替换成代理。它在正常业务 Bean 创建前准备好，因此能处理后续创建的 Bean。 普通 Bean 之间则会根据依赖递归创建：创建 A 发现需要 B，就先获取或创建 B；懒加载 Bean 可能到运行期间才创建。不是启动时排好一个绝对固定的完整顺序。
+
+3. 何时决定创建代理 忽略循环依赖、特殊 TargetSource 等分支，一个普通 Bean 的主路径是：
+
+实例化 target → 填充依赖 → 初始化回调
+→ 自动代理器 postProcessAfterInitialization()
+→ wrapIfNecessary() → 找适用的 Advisors
+→ 有匹配则创建 proxy，否则返回原对象
+→ 最终对象作为容器对外提供的 Bean
+注意：构造 target 和创建 proxy 是两件事；实例化完成和初始化完成也不是一回事。 “为什么这个类需要代理”的判断主要发生在 findEligibleAdvisors()：取得候选 Advisors，用其中的 ClassFilter、MethodMatcher 等判断是否适用于这个目标类及其方法，并排序。对你这个示例，只要 匹配，就足以让这个 Bean 需要代理；不代表它的每个方法都执行日志通知。 因此，其他 Bean 依赖 GreetingService 时，通常拿到的是已经包装完成的 proxy，不是先注入 target，再统一改写所有引用。允许的循环依赖场景可能走 getEarlyBeanReference() 提前暴露代理，这是额外分支，不是普通主流程。
+
+4. 切面代码如何被找到 这里要区分两种“扫描”：组件扫描把 @Component 切面注册成 BeanDefinition；AOP 基础设施再检查容器中的 Bean 类型，寻找 @Aspect。 具体到你的代码，BeanFactoryAspectJAdvisorsBuilder 找到切面，ReflectiveAspectJAdvisorFactory 分析 @Around 等通知方法，把表达式解析成 Pointcut，把 包装成 AspectJAroundAdvice，再组织成 Advisor。识别这些规则主要需要类型、注解和方法信息，不要求所有业务对象已经实例化；切面实例可通过保存的工厂在需要时取得。 到这里，Spring 已经把“用户写的注解和方法”转换成了“框架可以匹配和执行的对象”。运行时不是重新搜索整个工程，寻找哪些地方写了 @Around。
+
+5. JDK 的 h 何时赋值 选好 Advisors 后，自动代理器配置 ProxyFactory，放入 Advisors 和包含 target 的 TargetSource；选择 JDK 方案后，创建 JdkDynamicAopProxy。它实现了 InvocationHandler，也保存着这些 AOP 配置。 接着，它的 getProxy() 调用 Proxy.newProxyInstance(classLoader, interfaces, this)。这里的 this 就是已经创建好的 handler。 JDK 生成或复用代理类，再用这个 handler 构造代理实例；代理构造函数调用父类 Proxy 的构造函数，把引用保存到继承的 h 字段。 所以这不是 Spring 对 h 做了 @Autowired，只是普通的构造函数传参。不存在“为什么 handler 能这么早就有”的矛盾：顺序就是 准备配置 → 创建 handler → 把 handler 传进去创建 proxy → 把 proxy 交给调用方。 生成的代理类实现 GreetingService，其 方法转发到 h.invoke(this, method, args)；这里 this 是 proxy，method 通常是接口方法的反射对象，不是 target 的引用。target 由 handler 持有的配置间接取得。
+
+6. 一次调用究竟怎么跑 调用 时，JDK 主链路是：
+
+proxy.greet() → JdkDynamicAopProxy.invoke()
+→ 从 TargetSource 取得 target
+→ 获取当前方法的拦截器链 → ReflectiveMethodInvocation.proceed()
+→ AspectJAroundAdvice.invoke() → 切面实例.traceGreeting(joinPoint)
+→ joinPoint.proceed() → 后续拦截器 → target.greet()
+→ 按调用栈逐层返回
+invoke() 的核心工作不是“执行代理方法”，而是：拿 target，取得方法对应的链，有链就启动链，没有链就直接调用 target，最后处理返回值及必要的清理。它还处理 equals、代理暴露等分支，初读时可以先跳过。 获取链时，AdvisedSupport 查询缓存；需要构建时，由 DefaultAdvisorChainFactory 从这个代理已持有的 Advisors 中筛选适用于当前方法的通知，并适配成 MethodInterceptor。依赖实参的动态匹配还会留到执行时判断，所以“全在启动时匹配完”和“每次调用都重新扫描切面”都不准确。 ** 的含义是“继续剩余调用链”，不是“立即调用业务方法”。** 它推进当前拦截器下标，把同一次调用上下文交给下一个拦截器；走到链尾，才真正执行目标方法。 在这里包装了调用上下文，其 经调用副本继续后续链。 你的日志之所以能包住业务，是因为 先打印 before，再调用 等待里面的执行返回，随后打印 after。这就是普通方法调用栈的嵌套；多个环绕通知形成 A前 → B前 → target → B后 → A后。 如果你的 @Around 不调用 ，后续链和 target 就不会执行；如果内部抛异常，你当前代码里的 after 也不会执行，因为它不在 finally 中。
+
+7. CGLIB 到底差在哪里 JDK 代理是“实现接口的另一个类”；CGLIB 代理是“目标类的子类”，靠重写可拦截方法进入回调。两者主要区别在入口，后面的 Spring 通知链机制基本相同。 CGLIB 创建代理时配置 Spring callback，普通增强方法进入 CglibAopProxy.DynamicAdvisedInterceptor.intercept()，再获取 target、取得链、执行 ReflectiveMethodInvocation.proceed()。它不用 JDK 的 InvocationHandler.h。 一个尤其容易记错的点：Spring CGLIB AOP 不是必然通过 invokeSuper(proxy) 在代理自身执行原业务。 普通自动代理仍委托给独立 target；与你项目对应的 Spring 6.2.12 常规增强路径最终使用反射调用 target，不能把其他版本或手写 CGLIB 示例里的 FastClass、invokeSuper 路径直接套过来。 这也解释了为什么两种代理通常都有“自调用失效”：业务执行时 this 是 target，this.otherMethod() 没经过外部 proxy，因此不会重新进入代理通知链。CGLIB 不能拦截 final 方法、不能代理 final 类；JDK 则只能通过代理暴露的接口调用业务方法，不能转成目标实现类。 另外，Boot 默认优先使用 CGLIB，不是“有接口就一定选 JDK”。你的 明确配置了 proxy-target-class=true，却断言是 JDK 代理，两者不一致；要观察此例的 JDK 路径，应改成 false。本次只解释，没有修改或运行测试。
+
+你要补的背景
+
+对象模型：类和实例、引用、继承与组合、this 与 super。验收：能解释 proxy、handler、target 各是谁，为什么不是同一个对象。
+Java 动态代理与反射：Proxy.newProxyInstance()、InvocationHandler、Method.invoke(receiver, args)。验收：能解释为什么传 target 才执行业务，错误地传 proxy 可能再次进入代理。
+Spring Bean 生命周期：BeanDefinition、实例化、依赖填充、初始化、BeanPostProcessor。验收：能解释“对象已经 new 出来，为什么容器还能返回代理”。
+责任链与调用栈：拦截器、调用上下文、递归推进和返回。验收：不用 Spring 明确配置了 proxy-target-class=true，却断言是 JDK 代理，两者不一致；要观察此例的 JDK 路径，应改成 false。本次只解释，没有修改或运行测试。
+你要补的背景
+
+对象模型：类和实例、引用、继承与组合、this 与 super。验收：能解释 proxy、handler、target 各是谁，为什么不是同一个对象。
+Java 动态代理与反射：Proxy.newProxyInstance()、InvocationHandler、Method.invoke(receiver, args)。验收：能解释为什么传 target 才执行业务，错误地传 proxy 可能再次进入代理。
+Spring Bean 生命周期：BeanDefinition、实例化、依赖填充、初始化、BeanPostProcessor。验收：能解释“对象已经 new 出来，为什么容器还能返回代理”。
+责任链与调用栈：拦截器、调用上下文、递归推进和返回。验收：不用 Spring 类名，也能推导 before、异常、after 的执行顺序。
+元数据与执行分离：注解是描述，Advisor 是组织后的规则，Interceptor 是执行接口。验收：能解释为什么知道切面规则不需要先调用切面方法。 建议分两轮打断点：创建阶段看 wrapIfNecessary → findEligibleAdvisors → getProxy；调用阶段看 invoke/intercept → proceed → AspectJAroundAdvice.invoke → traceGreeting → greet。每次只问三个问题：当前是谁、它持有什么、接下来把控制权交给谁。你能回答这些，就不再需要硬背那一串类名。
+U
+用户
+14:36:11
+有一个是AOP的添加顺序，比如日志，权限等，这道题考察什么知识点
+
+A
+
+这道题主要考察 多个切面的执行顺序，以及责任链的嵌套执行机制，不是看你把日志、权限代码先写在哪个文件里。
+
+1. 顺序如何指定 Spring 通常通过 @Order 或 Ordered 控制不同切面的优先级：
+
+@Aspect
+@Component
+@Order(1)
+public class PermissionAspect { ... }
+
+@Aspect
+@Component
+@Order(2)
+public class LoggingAspect { ... }
+数值越小，优先级越高：进入时越早执行，返回时越晚退出。 没有明确指定顺序时，不应依赖扫描、声明或 Bean 创建顺序。
+
+2. 为什么不是简单顺序执行 假设权限、日志都是 @Around，都调用一次 ，业务正常返回，那么顺序是：
+
+权限前置
+  日志前置
+    业务方法
+  日志后置
+权限后置
+本质上是：
+
+权限(日志(业务))
+这考察你是否理解：** 执行的是剩余拦截器链，通知按调用栈嵌套，不是把所有切面依次执行完，再执行业务。**
+
+3. 顺序有什么业务影响
+
+权限在外，日志在内：权限拒绝并抛异常或直接返回时，日志切面根本进不去，可能记录不到拒绝访问。
+日志在外，权限在内：日志可以记录访问尝试，包括权限拒绝；但要通过 catch 或 finally 覆盖异常路径，仅在 后写日志是不够的。
+事务与其他切面：顺序决定某段代码是否在事务内，以及事务拦截器能否看到异常，从而影响回滚。
+所以“权限一定先于日志”不是通用答案，得先明确日志是记录业务执行，还是审计所有访问尝试。
+
+4. 面试深入会问什么 还可能追问不同通知类型的区别：@AfterReturning 只在正常返回时执行，@AfterThrowing 在异常时执行，@After 类似 finally；不能把环绕通知的示意顺序直接套到所有通知上。@Order 主要控制不同切面的顺序，也不能靠同一切面里方法的书写位置排序。
+
+你可以这样概括：
+
+这道题考察 Spring AOP 的优先级规则、拦截器责任链，以及顺序对权限短路、日志异常记录和事务边界的影响。高优先级切面在外层，进入早、退出晚。
+
+U
+用户
+15:03:22
+“假设一个业务方法同时被权限校验、执行耗时统计和操作审计三个切面拦截，你会怎么安排它们的顺序？正常返回和抛出异常时，不同类型的通知分别会怎样执行？如果环绕通知捕获了异常但没有继续抛出，会对调用方以及事务产生什么影响？”
+
+A
+助手
+15:03:22
+copilot/gpt-6.1-sol
+我会先明确需求：审计是否要记录权限拒绝，耗时是否包含权限校验。 顺序由这些语义决定，不是固定口诀。
+
+顺序安排 假设要求“所有访问尝试都审计，耗时统计包含权限校验”，我会安排：
+
+切面	优先级示例	原因
+操作审计	@Order(1)	最外层，记录成功、失败和权限拒绝
+耗时统计	@Order(2)	统计权限校验及后续执行耗时
+权限校验	@Order(3)	在业务执行前阻止非法访问
+数值越小越靠外，结构是：
+
+操作审计(耗时统计(权限校验(业务方法)))
+如果只统计通过权限后的业务耗时，则改成：审计 → 权限 → 耗时 → 业务。权限拒绝时，不进入耗时切面。
+
+通知如何执行 先区分“相对于某个通知所包住的后续链，正常返回还是抛出异常”：
+
+通知类型	正常返回	异常向外传播
+@Before	进入时执行	若已经进入则执行；自身抛异常会阻断后续链
+@AfterReturning	执行，可以取得返回值	不执行
+@AfterThrowing	不执行	异常类型匹配时执行
+@After	执行	执行，类似 finally
+@Around		
+前后均可执行		
+后的普通代码跳过，进入匹配的 catch，再执行 finally		
+假设三个切面都用环绕通知，正常返回时，进入顺序为审计、耗时、权限，退出顺序相反。业务抛异常时，异常沿权限、耗时、审计向外传播，各层执行自己的异常处理和 finally。
+
+耗时统计应放在 finally，审计应分别记录成功和异常，再原样抛出异常。 否则失败调用可能没有耗时或审计记录。如果权限校验直接抛异常，其内层通知和业务都不会进入。
+
+还有一个细节：不同通知类型混用时，完整顺序还受通知优先级影响，不能只凭代码书写位置推断。当前 Spring 中，同一切面的 @After 通常在 @AfterReturning 或 @AfterThrowing 后执行，因为它具有 finally 语义。
+
+环绕通知吞掉异常 例如：
+
+try {
+    return joinPoint.proceed();
+} catch (Exception exception) {
+    recordFailure(exception);
+    return fallbackValue;
+}
+这会把异常完成转换成正常返回：
+
+调用方拿到 后的普通代码跳过，进入匹配的 catch，再执行 finally |
+假设三个切面都用环绕通知，正常返回时，进入顺序为审计、耗时、权限，退出顺序相反。业务抛异常时，异常沿权限、耗时、审计向外传播，各层执行自己的异常处理和 finally。
+
+耗时统计应放在 finally，审计应分别记录成功和异常，再原样抛出异常。 否则失败调用可能没有耗时或审计记录。如果权限校验直接抛异常，其内层通知和业务都不会进入。
+
+还有一个细节：不同通知类型混用时，完整顺序还受通知优先级影响，不能只凭代码书写位置推断。当前 Spring 中，同一切面的 @After 通常在 @AfterReturning 或 @AfterThrowing 后执行，因为它具有 finally 语义。
+
+环绕通知吞掉异常 例如：
+
+try {
+    return joinPoint.proceed();
+} catch (Exception exception) {
+    recordFailure(exception);
+    return fallbackValue;
+}
+这会把异常完成转换成正常返回：
+
+调用方拿到 fallbackValue，不知道内部失败；返回值还必须满足方法的类型约束。
+外层的 @AfterReturning 可能执行，外层 @AfterThrowing 不会执行。
+内层已经观察到异常的通知仍可能执行过，不会被“撤销”。
+所以，业务实际失败，不代表每一层通知都能看到异常。
+
+对事务的影响 关键不是“异常有没有被捕获”，而是：事务拦截器是否看到了符合回滚规则的异常。
+
+嵌套关系	结果
+吞异常切面(事务(业务))	事务先看到异常，按规则回滚；外层再吞掉，调用方可能仍看到正常返回
+事务(吞异常切面(业务))	异常在到达事务前被吞掉，事务看到正常返回，通常会提交
+默认情况下，Spring 声明式事务对 RuntimeException 和 Error 回滚，受检异常通常不回滚，除非配置了 rollbackFor 等规则。事务 Advisor 后的普通代码跳过，进入匹配的 catch，再执行 finally |
+
+假设三个切面都用环绕通知，正常返回时，进入顺序为审计、耗时、权限，退出顺序相反。业务抛异常时，异常沿权限、耗时、审计向外传播，各层执行自己的异常处理和 finally。
+
+耗时统计应放在 finally，审计应分别记录成功和异常，再原样抛出异常。 否则失败调用可能没有耗时或审计记录。如果权限校验直接抛异常，其内层通知和业务都不会进入。
+
+还有一个细节：不同通知类型混用时，完整顺序还受通知优先级影响，不能只凭代码书写位置推断。当前 Spring 中，同一切面的 @After 通常在 @AfterReturning 或 @AfterThrowing 后执行，因为它具有 finally 语义。
+
+环绕通知吞掉异常 例如：
+
+try {
+    return joinPoint.proceed();
+} catch (Exception exception) {
+    recordFailure(exception);
+    return fallbackValue;
+}
+这会把异常完成转换成正常返回：
+
+调用方拿到 fallbackValue，不知道内部失败；返回值还必须满足方法的类型约束。
+外层的 @AfterReturning 可能执行，外层 @AfterThrowing 不会执行。
+内层已经观察到异常的通知仍可能执行过，不会被“撤销”。
+所以，业务实际失败，不代表每一层通知都能看到异常。
+
+对事务的影响 关键不是“异常有没有被捕获”，而是：事务拦截器是否看到了符合回滚规则的异常。
+
+嵌套关系	结果
+吞异常切面(事务(业务))	事务先看到异常，按规则回滚；外层再吞掉，调用方可能仍看到正常返回
+事务(吞异常切面(业务))	异常在到达事务前被吞掉，事务看到正常返回，通常会提交
+默认情况下，Spring 声明式事务对 RuntimeException 和 Error 回滚，受检异常通常不回滚，除非配置了 rollbackFor 等规则。事务 Advisor 也参与排序，默认通常是最低优先级，不能只看这三个切面的顺序判断事务结果。
+
+如果事务已经被内部参与者标记为 rollback-only，吞异常也不能让它提交；提交时还可能出现 UnexpectedRollbackException。
+
+**面试收尾可以概括：**我按审计范围和计时范围安排切面，理解它们是嵌套责任链；异常是否被某层观察到决定通知行为，是否被事务拦截器观察到并匹配回滚规则决定事务结果。日志和计时切面一般不应擅自吞掉业务异常。
+
+
+
+Updated todo list
+
+Spring Boot 默认使用 Spring AOP，代理策略是：
+
+- **有接口的 Bean**：默认使用 **JDK 动态代理**
+- **没有接口的 Bean**：使用 **CGLIB 子类代理**
+
+不过 Spring Boot 通常默认配置了 `spring.aop.proxy-target-class=true`，因此实际会优先统一使用 **CGLIB 代理**，即使目标类实现了接口也是如此。
+
+可在 `application.properties` 中切换：
+
+```properties
+# 强制 CGLIB（Spring Boot 默认通常如此）
+spring.aop.proxy-target-class=true
+
+# 优先使用 JDK 动态代理；无接口时仍会退回 CGLIB
+spring.aop.proxy-target-class=false
+```
+
+CGLIB 通过继承生成子类，所以 `final` 类或 `final` 方法不能被代理增强。
+
+
+Updated todo list
+
+有，而且 AOP 代理就是在 Bean 生命周期中创建并替换对外引用的。
+
+简化流程：
+
+```text
+实例化目标对象
+  -> 依赖注入
+  -> Aware 回调
+  -> BeanPostProcessor 前置处理
+  -> @PostConstruct / 初始化方法
+  -> BeanPostProcessor 后置处理
+       -> AOP 判断该 Bean 是否需要增强
+       -> 需要：创建代理对象并作为最终 Bean 返回
+       -> 不需要：返回原目标对象
+  -> 放入单例池，对外注入
+```
+
+关键点是 `BeanPostProcessor`，尤其是 AOP 相关的 `AbstractAutoProxyCreator`。它在初始化后置处理阶段检查切点、`@Transactional` 等增强条件；命中后，返回代理对象替代原对象。
+
+所以：
+
+- 不需要 AOP：单例池里是原始对象。
+- 需要 AOP：单例池里通常是代理对象，真实对象由代理持有。
+- 后续 `getBean()`、依赖注入拿到的是单例池中的最终对象，即代理对象。
+
+循环依赖时会更复杂：为保证其他 Bean 不会提前拿到原始对象，Spring 可能在“提前暴露引用”阶段就生成**早期代理对象**。
+
+
+Updated todo list
+
+**先区分两个阶段**
+
+Bean 生命周期通常指“某个 Bean 从创建到销毁”的过程。其之前还有容器启动和 Bean 定义注册阶段：
+
+```text
+启动 ApplicationContext
+  -> 读取配置类 / XML
+  -> 扫描 @Component、@Service、@Bean
+  -> 注册 BeanDefinition（元数据，还没有创建对象）
+  -> 执行 BeanFactoryPostProcessor
+  -> 创建非懒加载单例 Bean
+  -> 容器就绪
+```
+
+`@ComponentScan` 只是在这里找到 `GreetingServiceImpl` 并注册其定义；此时还没有真实对象，也谈不上代理。
+
+---
+
+**普通单例 Bean 的完整创建主线**
+
+以 `GreetingServiceImpl` 为例，核心逻辑在 `AbstractAutowireCapableBeanFactory#doCreateBean()`：
+
+```text
+1. 实例化
+   -> 调用构造器，创建原始对象 target
+
+2. 提前暴露引用（仅单例且可能存在循环依赖）
+   -> 将 ObjectFactory 放入三级缓存
+   -> 其他 Bean 若循环依赖它，可取得 early reference
+
+3. 属性填充 / 依赖注入
+   -> @Autowired、@Value、@Resource 等
+   -> 给 target 的字段或 Setter 注入依赖
+
+4. 初始化前处理
+   -> BeanPostProcessor#postProcessBeforeInitialization
+
+5. 初始化回调
+   -> @PostConstruct
+   -> InitializingBean#afterPropertiesSet()
+   -> @Bean(initMethod = "...") 或 XML init-method
+
+6. 初始化后处理
+   -> BeanPostProcessor#postProcessAfterInitialization
+   -> 常规 AOP 代理通常在这里生成
+
+7. 缓存最终引用
+   -> 单例 Bean 放入一级缓存 singletonObjects
+   -> 容器后续 getBean() 与依赖注入均返回该对象
+
+8. 容器关闭时销毁
+   -> @PreDestroy
+   -> DisposableBean#destroy()
+   -> destroy-method
+```
+
+---
+
+**每个扩展点对应的位置**
+
+| 生命周期位置 | 常见扩展机制 | 用途 |
+|---|---|---|
+| BeanDefinition 注册后、实例化前 | `BeanFactoryPostProcessor` | 修改 Bean 定义，例如读取属性、处理配置 |
+| 构造器调用前 | `InstantiationAwareBeanPostProcessor#postProcessBeforeInstantiation` | 可直接返回替代对象，少见的“实例化前代理”场景 |
+| 构造器调用 | 构造器、工厂方法 | 创建原始目标对象 |
+| 属性注入阶段 | `postProcessProperties` | `@Autowired`、`@Value` 注入 |
+| 初始化前 | `postProcessBeforeInitialization` | `@PostConstruct` 所在的处理链附近 |
+| 初始化方法 | `afterPropertiesSet`、`initMethod` | Bean 自己的初始化逻辑 |
+| 初始化后 | `postProcessAfterInitialization` | 常规 AOP 创建代理的主要位置 |
+| 销毁 | `@PreDestroy`、`destroy` | 释放资源 |
+
+`BeanPostProcessor` 是整个机制的关键。许多 Spring 能力本质上都是 Bean 后置处理器：依赖注入、生命周期注解、AOP、事务、缓存、异步等。
+
+---
+
+**AOP 具体在哪一步发生**
+
+典型情况下，真实对象先经历完整的注入和初始化：
+
+```java
+@Service
+@Transactional
+public class OrderServiceImpl implements OrderService {
+    @Autowired
+    private PaymentService paymentService;
+
+    @PostConstruct
+    void init() { }
+}
+```
+
+随后在第 6 步，AOP 的 `AutoProxyCreator` 检查它是否命中切点、`@Transactional`、`@Async`、`@Cacheable` 或自定义 `@Around` 切面：
+
+```text
+target = new OrderServiceImpl()
+target.paymentService = paymentService
+target.init()
+
+proxy = createAopProxy(target)
+return proxy
+```
+
+最终一级缓存中保存的是：
+
+```text
+singletonObjects["orderService"] = proxy
+```
+
+因此其他 Bean 注入到的是 `proxy`，代理再把调用转发给 `target`。
+
+---
+
+**循环依赖时的特殊点**
+
+假设：
+
+```text
+A 依赖 B
+B 依赖 A
+```
+
+创建 A 时，Spring 在“属性注入前”先提前暴露 A 的引用。AOP 的 `AutoProxyCreator` 会在此时通过：
+
+```java
+SmartInstantiationAwareBeanPostProcessor#getEarlyBeanReference(...)
+```
+
+生成或获取**早期代理引用**，确保 B 注入到 A 的也是代理，而非原始对象。
+
+所以 AOP 有两个相关时机：
+
+```text
+无循环依赖：
+  初始化后 postProcessAfterInitialization -> 创建代理
+
+有循环依赖：
+  提前暴露 getEarlyBeanReference -> 提前生成代理
+  初始化后 -> 复用同一个代理，避免 B 拿到原对象
+```
+
+---
+
+**为何 `this.xxx()` 不经过 AOP**
+
+代理只存在于容器对外暴露的入口：
+
+```text
+其他 Bean -> proxy -> target.methodA()
+```
+
+但真实对象内部调用是：
+
+```java
+public void methodA() {
+    this.methodB();
+}
+```
+
+这里的 `this` 就是 `target` 本身，并不是 `proxy`，因此直接执行 `methodB()`，不会重新进入代理，也不会触发 `@Transactional` 等 AOP 逻辑。
+
+
+
+

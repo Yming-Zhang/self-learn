@@ -1,0 +1,451 @@
+Terraform
+
+学习路径
+系统性学习资源
+1. 官方文档（最权威）
+官方文档主页：https://developer.hashicorp.com/terraform
+内置函数参考：https://developer.hashicorp.com/terraform/language/functions
+这里有所有内置函数的详细说明和示例
+渐进式学习
+先学习简单的字符串和数学函数
+然后掌握集合操作函数
+最后深入理解复杂的转换函数
+6. 学习技巧
+查阅官方文档：遇到不熟悉的函数直接查 https://developer.hashicorp.com/terraform/language/functions
+动手实验：创建测试文件验证函数行为
+理解用途：不仅要学会语法，更要理解在什么场景下使用
+循序渐进：不要试图一次性掌握所有函数
+7. 社区资源
+Terraform Registry：https://registry.terraform.io/ （模块和提供程序）
+GitHub：搜索 terraform examples
+Stack Overflow：terraform 相关问题
+HashiCorp Learn：https://learn.hashicorp.com/terraform
+通过系统地学习这些内容，你就能熟练掌握 Terraform 的各种功能，包括你现在看到的这些复杂的数据处理操作。
+2. 核心学习路径
+基础语法
+变量（Variables）
+输出（Outputs）
+资源（Resources）
+模块（Modules）
+提供商（Providers）
+表达式和函数
+字符串表达式
+条件表达式
+for 表达式
+内置函数
+高级特性
+工作区（Workspaces）
+状态管理
+导入资源
+生命周期管理
+
+重点函数-数据处理
+# 集合函数
+concat()     # 连接列表
+distinct()   # 去重
+flatten()    # 展平嵌套列表
+setproduct() # 笛卡尔积
+
+# 映射函数
+keys()       # 获取键列表
+values()     # 获取值列表
+merge()      # 合并映射
+lookup()     # 查找值
+
+# 类型转换
+toset()      # 转换为集合
+tolist()     # 转换为列表
+tomap()      # 转换为映射
+控制条件
+# for 表达式
+[for item in list: transform(item)]
+{for key, value in map: key => transform(value)}
+
+# 条件表达式
+condition ? value_if_true : value_if_false
+
+
+学习步骤
+推荐学习步骤
+入门基础（1-2天）
+安装和基本命令
+资源和提供程序概念
+变量和输出
+核心语法（3-5天）
+表达式语法
+for 循环表达式
+条件表达式
+内置函数（5-7天）
+数学函数
+字符串函数
+集合函数
+编码函数
+文件函数
+高级特性（持续学习）
+模块化设计
+状态管理
+最佳实践
+
+# 1. 设置阿里云认证信息（通常从阿里云控制台获取）
+export ALIBABA_CLOUD_ACCESS_KEY_ID="your_actual_access_key_id"
+export ALIBABA_CLOUD_ACCESS_KEY_SECRET="your_actual_access_key_secret"
+export ALIBABA_CLOUD_SECURITY_TOKEN="your_security_token"
+
+# 2. 选择部署环境
+export ENV=ERD-TLP-E2E
+
+# 3. 执行部署命令
+make create-java-package-bucket
+
+# 清除单个环境变量
+unset ALIBABA_CLOUD_ACCESS_KEY_ID
+unset ALIBABA_CLOUD_ACCESS_KEY_SECRET
+unset ALIBABA_CLOUD_SECURITY_TOKEN
+unset ENV
+
+# 验证变量是否已清除
+echo $ALIBABA_CLOUD_ACCESS_KEY_ID  # 应该输出空行
+
+
+
+理解 Makefile 基本结构
+目标(target)、依赖(dependencies)、命令(commands)
+默认目标和 .PHONY 目标
+掌握变量使用
+变量定义：VAR = value 和 VAR := value
+变量引用：$(VAR) 和 ${VAR}
+
+
+   ifeq ($(VAR), value)
+       # commands
+   endif
+   
+
+
+   $(shell command)
+   $(subst from,to,text)
+   
+基础命令
+terraform init
+terraform plan
+terraform apply
+terraform destroy
+高级参数
+-target 精确资源控制
+-auto-approve 自动确认
+-var 和 -var-file 变量传递
+
+
+
+【亲测免费】 Terraform Datadog 平台配置指南
+
+https://blog.csdn.net/gitblog_00331/article/details/142118237
+
+
+datadog-terraform官方文档
+https://www.datadoghq.com/blog/managing-datadog-with-terraform/
+
+
+Datadog 到 Terraform 转换器：轻松管理监控与告警
+https://blog.csdn.net/gitblog_00940/article/details/142039455
+
+官方文档示例
+https://developer.hashicorp.com/terraform/tutorials/configuration-language/resource
+https://developer.hashicorp.com/terraform/cli/commands/apply#target
+
+
+
+
+
+
+
+mac安装方式
+# 使用 tfenv（便于切换版本）
+brew install tfenv
+tfenv install 1.5.7            # 安装指定版本
+tfenv use 1.5.7
+
+
+terraform version
+tfenv use 1.9.5
+
+下载datadog插件时超时报错，多试了几次可以了
+2025-11-21
+这个datadog provider的下载太偶然了，后续都没下载成功过，只能用之前下载过的来解析，特别是云上也无法下载成功
+试一下手动安装方案
+https://github.com/DataDog/terraform-provider-datadog/releases/tag/v3.78.0
+下载地址
+zhangyunming@zhangyunmingdeMacBook-Air ~ % cat ~/.terraformrc
+provider_installation {
+  filesystem_mirror {
+    path    = "/Users/zhangyunming/dstock/plugins/"
+    include = ["registry.terraform.io/datadog/datadog"] # datadog provider 走本地目录
+  }
+  network_mirror {
+    url = "https://mirrors.aliyun.com/terraform/"
+    include = ["registry.terraform.io/aliyun/alicloud",
+               "registry.terraform.io/hashicorp/alicloud"]
+  }
+  direct {
+    exclude = [
+      "registry.terraform.io/datadog/datadog",          # 不用直连拉 datadog（因为前面镜像已有）
+      "registry.terraform.io/aliyun/alicloud",
+      "registry.terraform.io/hashicorp/alicloud"
+    ]
+  }
+}
+本地测试手动，放在原目录下怎么都不行
+Error: Failed to query available provider packages
+│ 
+│ Could not retrieve the list of available versions for provider datadog/datadog: cannot search ~/.terraform.d/plugins: lstat ~/.terraform.d/plugins: no such file or
+│ directory
+一直报这个错误
+直到后来改成了一个普通的地址才能正常检索到，唯一的解释是terraform执行时的权限太低了，这个路径尽量不要特殊
+
+
+正式alicloud ecs上运行，还是报错找不到
+忘记写linux_amd64这一层了，补全后可以了
+mkdir -p plugins/registry.terraform.io/datadog/datadog/3.78.0/linux_amd64
+mv /home/zane/terraform-provider-datadog_3.78.0_linux_amd64.zip /home/erd-runner/plugins/registry.terraform.io/datadog/datadog/3.78.0/linux_amd64/
+
+unzip xx.zip
+调整 .terraformrc的内容，使用vim操作快捷键
+Vim 有三种主要模式：
+正常模式（Normal Mode）：默认模式，用于执行编辑命令
+插入模式（Insert Mode）：用于输入文本
+命令行模式（Command-line Mode）：用于执行 Ex 命令
+在正常模式下使用快捷命令快速删除，插入模式下可以command+v粘贴
+：wq。保存退出
+：q！不保存退出
+和本地表现一样
+Others
+Oss-backend
+Oss存储了tfstate文件，and tablestore存储了state_lock文件，如果只删除tfstate文件，不清理tablestore中对应的lock文件，再执行就会报错
+下载alicloud插件报错超时，使用init加速配置解决
+https://help.aliyun.com/zh/terraform/terraform-init-acceleration-solution-configuration
+以 macOS 为例，macOS 的主目录为： /Users/用户名，在home目录下创建.terraformrc文件，内容如下：
+provider_installation {
+  network_mirror {
+    url = "https://mirrors.aliyun.com/terraform/"
+    # 限制只有阿里云相关 Provider 从国内镜像源下载
+    include = ["registry.terraform.io/aliyun/alicloud", 
+               "registry.terraform.io/hashicorp/alicloud",
+              ]   
+  }
+  direct {
+    # 声明除了阿里云相关Provider, 其它Provider保持原有的下载链路
+    exclude = ["registry.terraform.io/aliyun/alicloud", 
+               "registry.terraform.io/hashicorp/alicloud",
+              ]  
+  }
+}
+
+
+# 设置环境变量确保使用正确的配置文件—可选但是推荐
+export TF_CLI_CONFIG_FILE="$HOME/.terraformrc"
+另一种方法是手动下载插件后再本地解压（此方法还没试用，official 方案优先）
+https://releases.hashicorp.com/terraform-provider-alicloud/
+官方文档链接
+要查找关于 alicloud_cms_alarm 资源的官方文档，您可以参考以下链接：
+阿里云Terraform Provider官方文档：
+主页：https://registry.terraform.io/providers/aliyun/alicloud/latest/docs
+CMS Alarm资源文档：https://registry.terraform.io/providers/aliyun/alicloud/latest/docs/resources/cms_alarm
+阿里云官方文档：
+阿里云CloudMonitor服务文档：https://www.alibabacloud.com/help/product/28572.htm
+GitHub仓库：
+阿里云Terraform Provider GitHub地址：https://github.com/aliyun/terraform-provider-alicloud
+这些资源可以帮助您更好地理解和使用阿里云CMS告警规则的Terraform资源定义。您可以在官方文档中找到更多参数选项、使用示例和最佳实践
+
+现在要写cloud monitor service 里面的 alert rule，需要先把里面的按照terraformtemplate  export
+terraform import alicloud_cms_alarm.imported_rule uuid_af1400c7bd1c782c17cb0bd96db19a0ff3dd331db
+
+导入的内容会存在state文件里，需要看正常的格式，需要使用下面的命令
+Terraform show
+第一遍错误
+Official docs provider only need key and secret,
+But handle this resource need token too
+So,after set the provider token,export normally
+https://help.aliyun.com/zh/terraform/basic-concepts
+
+Terraform 工作流程包括模板编写、初始化、预览、执行四部分。本文主要介绍模板编写，即 Terraform 配置和 Hashicorp 配置语言（Hashicorp Configuration Language，HCL）。
+Terraform 目录
+我们从编写阶段开始，在这里您会在 .tf 文件中编写 Terraform 代码。 在编写代码之前，首先创建一个 Terraform 配置的目录。Terraform 配置是一个完整的 Terraform 语言文档，它告诉Terraform 如何管理给定的基础设施集合。Terraform 配置存储在 .tf 扩展名的文件中。 一个 Terraform 配置目录可以由多个文件和目录组成。一个Terraform配置包括：一个根模块和可选的多个子模块树。
+•	根模块
+根模块也被称为根配置文件，是运行 Terraform 命令的工作目录。在该目录中，Terraform 将寻找所有 .tf 文件，并使用它们来创建执行计划。您可以在单个根配置文件中编写所有的资源和其他代码结构（如入参变量，出参定义，提供商等），但最佳实践是按照逻辑将资源拆分到不同的配置文件中。
+•	子模块
+子模块是可选的，每个子模块可以是出于对某类复用功能的抽象，也可以是出于对根模块复杂逻辑的简化。根模块通过对子模块的引用来降低根模块的编写复杂度，提升复用性和可读性。
+
+//根模块
+-- main.tf
+--providers.tf 
+-- variables.tf 
+-- outputs.tf
+//子模块
+-- -- -- servers/
+-- -- -- --main.tf
+-- -- -- --variables.tf
+-- -- -- --outputs.tf
+
+每个模块通常会包含如下几种配置文件：
+•	资源配置文件（main.tf）
+声明所要管理的基础设施资源及其期望的状态，通常命名为 main.tf，也可以按照资源类型或者产品名称或者场景进行自定义，如 ecs.tf，network.tf，database.tf等
+•	提供商配置文件（provider.tf）
+声明当前模块使用到的提供商的名称、版本以及认证方式，如 aliyun/alicloud，hashicorp/random 等
+•	入参配置文件（variables.tf）
+声明当前模块使用到的变量，以便在执行 Terraform 命令的时候，可以通过传入不同的变量值来提升模块的灵活性
+•	出参配置文件（outputs.tf）
+声明期望当前模块中的资源在完成创建后输出的变量值，比如实例 ID，IP 地址等
+
+值得注意的是，HCL 本质上是声明式的，意味着模板中定义的块代表了基础设施的最终状态。因此，块或文件的顺序并不重要。
+
+在实际应用中，良好的 Terraform 配置应该遵循一定的最佳实践，如适当地组织文件、使用模块化方法来复用代码、以及通过参数化使配置更加灵活。此外，了解Terraform的状态管理和如何管理多环境配置也是十分重要的。
+
+资源（Resources）
+提供商（Provider）
+提供商通常定义在 providers.tf 文件中，您需要指定包含提供商定义的 Terraform 块。
+变量（Variables）
+
+
+Terraform-datddog文档
+https://registry.terraform.io/providers/DataDog/datadog/latest/docs/resources/dashboard
+
+Terraform -module-resource分离工程化方案
+
+1.	基础方案
+Module定义实体数据，resource定义资源模板
+这样的话，后续增加同类资源，只需要增加module，resource不需要改动
+But，source引用方式只能到目录级别，所以要求一个resource一个文件目录
+这样的话，对于实际的大项目来说，就有不少弊端，导致resource的目录庞大和混乱。
+所以需要可以多个类型的resource模板可以写在同一个文件里，还得让module引用那不报错。
+
+2.	count分支法
+在Terraform中，count参数是一个特殊的元参数，用于控制要创建的资源实例数量。
+当count = 0时，Terraform会认为你不想创建这个资源，因此不会创建任何实例。这是Terraform的核心行为之一。
+让我详细解释一下：
+count参数的作用：
+count决定了要创建多少个相同的资源实例
+当count = 1时，创建1个实例
+当count = 0时，创建0个实例（即不创建）
+访问属性的方式： 由于使用了count，访问资源属性时需要用索引：
+这是Terraform中一种常见的模式，叫做"条件资源创建"(Conditional Resource Creation)，允许我们在同一个模块中定义多种资源类型，但只根据条件创建其中的一种或几种。
+当资源使用了count参数时，你需要通过索引来访问资源属性。
+比如out时
+固定的【0】，因为只创建一个资源
+为什么只有一个呢？当有多个同类的时候，这个列表会有多个吗？也就是说这个序号是针对module的，还是resource的？
+
+
+module "XXX" {
+  source = "../../../service-module/cms-resources"
+  providers = {
+    alicloud = alicloud.erd
+  }
+  
+  resource_type       = "contact"
+  contact_name        = "nameX"
+  contact_description = "script auto create contact"
+  contact_email       = "andy.zhu@partner.bmwgroup.com"
+}
+  resource "alicloud_cms_contact" "this" {
+  count = var.resource_type == "contact" ? 1 : 0
+
+  contact_name        = var.contact_name
+  contact_description = var.contact_description
+  contact_email       = var.contact_email
+  contact_phone       = var.contact_phone
+}
+output "contact_name" {
+  value = var.resource_type == "contact" ? alicloud_cms_contact.this[0].contact_name : ""
+}
+
+output "group_name" {
+  value = var.resource_type == "contact_group" ? alicloud_cms_contact_group.this[0].contact_group_name : ""
+}
+这样写还是有重复代码。我们可以使用类似之前提到的 local 和 merge 技术来进一步优化。让我们看看如何重构这段代码：
+
+3.	count+local 同类module合并map
+
+这样修改的好处：
+消除了重复代码：不再需要为每个联系人写一个单独的 module 块
+易于维护：所有配置数据都集中在 locals 中，添加或删除联系人只需要修改这个部分
+可扩展性强：如果需要添加更多联系人，只需在 local.contacts 中添加新的条目即可
+动态引用：使用 [for member in each.value.members : module.cms_contact[member].contact_name] 语法动态构建联系人组的成员列表
+这种模式遵循了 Terraform 最佳实践，使代码更加简洁、可维护和可扩展。
+locals {
+  contacts = {
+    MrX = {
+      name        = "MrX"
+      description = "script auto create contact"
+      email       = "Zane.ZA.Zhang@batw.bmwgroup.com"
+    }
+    MrY = {
+      name        = "MrY"
+      description = "script auto create contact"
+      email       = "Zane.ZA.Zhang@batw.bmwgroup.com"
+    }
+  }
+
+  contact_groups = {
+    OnlyX = {
+      name        = "OnlyXY"
+      description = "script auto create contact group "
+      # members     = ["MrX"]  // 可以添加更多成员，如 ["MrX", "MrY"]
+    }
+  }
+}
+
+// 使用 for_each 动态创建联系人
+module "cms_contact" {
+  source = "../../../service-module/cms-contacts"
+  providers = {
+    alicloud = alicloud.erd
+  }
+  for_each = local.contacts
+  resource_type       = "contact"
+  contact_name        = each.value.name
+  contact_description = each.value.description
+  contact_email       = each.value.email
+}
+
+// 使用 for_each 动态创建联系人组
+module "cms_contact_group" {
+  source = "../../../service-module/cms-contacts"
+  providers = {
+    alicloud = alicloud.erd
+  }
+  for_each = local.contact_groups
+  resource_type       = "contact-group"
+  contact_group_name  = each.value.name
+  group_description   = each.value.description
+  custom_contacts     = [for member in local.contacts : member.name]
+}
+
+
+resource "alicloud_cms_alarm_contact" "contact" {
+  count = var.resource_type == "contact" ? 1 : 0
+  alarm_contact_name = var.contact_name
+  describe           = var.contact_description
+  channels_mail      = var.contact_email
+  channels_sms     = var.contact_phone
+
+  lifecycle {
+    ignore_changes = [channels_mail]
+  }
+}
+resource "alicloud_cms_alarm_contact_group" "group" {
+  count = var.resource_type == "contact-group" ? 1 : 0
+  alarm_contact_group_name = var.contact_group_name
+  contacts                 = var.custom_contacts
+  describe                 = var.group_description
+}
+
+虽然消除了同类module，但是不同类的还是写出来了,现在只想定义一个module进行调用，所有resource还是写在一个文件里
+4.	高层抽象
+将不同类型的资源都定义在一个module中
+上面的几个方案要么明写实例，要么像方案三一样低层抽象，高层抽象的好处是：
+	简化主配置文件：只需要一个module调用，而不是多个
+	更好的封装性：所有监控相关的资源配置都被封装在模块内部
+	易于复用：可以在不同环境或项目中复用整个监控配置模块
+	逻辑分离：主配置文件关注"要什么"，模块内部关注"怎么做"
+	便于维护：当需要修改监控系统实现时，只需修改模块，不影响使用模块的代码
+
+比如联系人、组、报警规则，差别挺大，所以需要抽象出一种module，将这几种作为子资源包含进module定义中来。

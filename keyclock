@@ -1,0 +1,117 @@
+Brew库还没有这个制品，所以直接官网下载（速度比githhub下载要快很多）
+https://www.keycloak.org/downloads
+
+
+还有一篇图形化操作指引文章
+https://cloud.tencent.com/developer/article/1759924
+
+进入解压路径执行启动命令，jdk低于17应该是不行
+Java 版本要求 ：Keycloak 22.x+ 需要 JDK 17 或更高版本。你可以用 java -version 命令检查，如果没有则可以通过 brew install openjdk@17 安装后配置环境变量
+Vue+springboot集成方案
+一：public client
+前端 npm keycloak的js
+npm install keycloak-js
+然后url什么的export
+import Keycloak from 'keycloak-js';
+
+const keycloak = new Keycloak({
+//   clientId: 'tlp-erd-admin'
+  //   url: 'http://localhost:8080',
+  // realm: 'erd-page',
+  // clientId: 'page-id'
+  url: 'http://localhost:8080',
+  realm: 'hoover',
+  clientId: 'hoover-id'
+});
+
+export default keycloak;
+
+然后有个keycloak的对象
+可以init、login、logout、还有直接.token拿token
+await keycloak.init({ onLoad: 'check-sso' });
+if (keycloak.authenticated) {
+    localStorage.setItem('token', keycloak.token);
+
+这个因为public类型的client，前端可以直接拿token，我们登录后，
+我们引入的那个keycloak.js 资源Keycloak JS 适配器自动帮你完成 code to token（即后台自动 POST 换 Token、刷新、存管理向 sessionStorage）。
+
+后端pom引入
+<dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-oauth2-resource-server</artifactId>
+</dependency>
+
+<dependency>
+    <groupId>org.keycloak</groupId>
+    <artifactId>keycloak-core</artifactId>
+    <version>25.0.4</version>
+</dependency>
+<dependency>
+    <groupId>org.keycloak</groupId>
+    <artifactId>keycloak-common</artifactId>
+    <version>25.0.4</version>
+</dependency>
+
+<dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-oauth2-resource-server</artifactId>
+</dependency>
+<dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-security</artifactId>
+</dependency>
+配置文件
+spring.security.oauth2.resourceserver.jwt.issuer-uri=http://localhost:8080/realms/erd-page
+这个必须得配。要不然检测不到，不回家在jwtdecoder bean，启动会报错
+引入的这个资源可以根据这个url自动拿到信息来解析keycloak的token
+配置上token解析filter
+/**
+ * spring security配置
+ */
+@EnableMethodSecurity(prePostEnabled = true, securedEnabled = true)
+@Configuration
+public class SecurityConfig {
+
+@Bean
+@Order(1)
+public SecurityFilterChain keycloakLoginFilterChain(HttpSecurity http) throws Exception {
+    http
+            .securityMatcher("/auth/login") // 仅匹配auth/login
+            .csrf(csrf -> csrf.disable())
+            .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+            .authorizeHttpRequests(auth -> auth
+                    .requestMatchers("/auth/login").permitAll()
+                    .anyRequest().denyAll()
+            )
+            .oauth2ResourceServer(oauth2 -> oauth2.jwt(Customizer.withDefaults())) // 启用Keycloak Jwt自动校验
+            .exceptionHandling(ex -> ex.authenticationEntryPoint(unauthorizedHandler))
+    ;
+    // 可选加CORS
+    http.addFilterBefore(corsFilter, UsernamePasswordAuthenticationFilter.class);
+    return http.build();
+}
+可以debug几个内部解析类
+org.springframework.security.oauth2.server.resource.web.authentication
+
+BearerTokenAuthenticationFilter
+protected void doFilterInternal（…..）
+
+org.springframework.security.oauth2.server.resource.authentication;
+JwtAuthenticationProvider
+public Authentication authenticate(Authentication authentication)
+
+@PostMapping("/login")
+public Result<LoginResponse> login(@AuthenticationPrincipal Jwt jwt) {
+    if (jwt == null) {
+        return Result.error(401, "未登录");
+    }
+    String username = jwt.getClaimAsString("preferred_username");
+    // ...你的自定义jwt生成逻辑
+    LoginRequest loginRequest = new LoginRequest();
+    loginRequest.setUsername(username);
+    loginRequest.setLoginType(3);
+    return Result.success(authService.login(loginRequest));
+}
+
+二：Client authentication
+前端不参与token获取，只接收登录返回的code，然后传给后端，后端拿着code+secret去keycloak拉取token
